@@ -1,213 +1,332 @@
 (() => {
   'use strict';
 
-  const FALLBACK = {
-    profile: {
-      name: 'Your Name',
-      tagline: 'Software Engineer',
-      bio: 'Edit config.json to make this your own.',
-      avatar: 'https://github.com/github.png',
-      cta: [{ label: 'View my work', url: '#projects' }],
-      socials: [{ label: 'GitHub', url: 'https://github.com' }]
+  const GITHUB_API = 'https://api.github.com';
+  const ESC = /([&<>"'])/g;
+  const esc = (s) => String(s == null ? '' : s).replace(ESC, (m) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  }[m]));
+
+  const STYLES = {
+    clean: {
+      emoji: '📄',
+      name: 'Clean & Simple',
+      desc: 'The most-followed layout style (anuraghazra). Professional, scannable, converts visitors.',
+      tags: ['stats cards', 'about bullets', 'top languages']
     },
-    theme: 'dark',
-    githubUsername: '',
-    about: { text: 'Tell your story in config.json.', highlights: [] },
-    projects: [],
-    skills: [],
-    githubStats: true
+    typing: {
+      emoji: '⌨️',
+      name: 'Typing Header',
+      desc: 'Animated typewriter header (DenverCoder1-style) with centered layout. Playful but professional.',
+      tags: ['typing animation', 'social icons', 'light + dark']
+    },
+    badges: {
+      emoji: '🎨',
+      name: 'Badge Heavy',
+      desc: 'Full tech-stack badge wall (classic style). Good for showing every tool you know.',
+      tags: ['shields.io badges', 'sections', 'footer quote']
+    }
   };
 
-  let cfg = null;
+  let state = { style: 'clean', user: null, repos: [] };
 
   const $ = (id) => document.getElementById(id);
-
-  const esc = (s) => String(s)
-    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-
-  const socialIcon = (label) => {
-    const l = label.toLowerCase();
-    if (l.includes('github')) return '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 .5C5.65.5.5 5.65.5 12c0 5.08 3.29 9.39 7.86 10.91.58.11.79-.25.79-.56 0-.28-.01-1.02-.02-2-3.2.7-3.88-1.54-3.88-1.54-.52-1.33-1.28-1.68-1.28-1.68-1.04-.71.08-.7.08-.7 1.15.08 1.76 1.19 1.76 1.19 1.03 1.76 2.7 1.25 3.36.96.1-.75.4-1.25.72-1.54-2.55-.29-5.24-1.28-5.24-5.68 0-1.26.45-2.28 1.19-3.09-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.17 1.18a11 11 0 0 1 5.78 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.81 1.19 1.83 1.19 3.09 0 4.41-2.7 5.38-5.27 5.67.41.36.78 1.06.78 2.14 0 1.55-.01 2.79-.01 3.17 0 .31.21.67.8.55A11.5 11.5 0 0 0 23.5 12C23.5 5.65 18.35.5 12 .5z"/></svg>';
-    if (l.includes('linkedin')) return '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M20.45 20.45h-3.55v-5.57c0-1.33-.03-3.04-1.85-3.04-1.85 0-2.14 1.45-2.14 2.94v5.67H9.36V9h3.41v1.56h.05c.48-.9 1.64-1.85 3.37-1.85 3.6 0 4.27 2.37 4.27 5.46v6.28zM5.34 7.43a2.06 2.06 0 1 1 0-4.12 2.06 2.06 0 0 1 0 4.12zM7.12 20.45H3.55V9h3.57v11.45zM22.22 0H1.77C.79 0 0 .77 0 1.72v20.55C0 23.23.79 24 1.77 24h20.45c.98 0 1.78-.77 1.78-1.73V1.72C24 .77 23.2 0 22.22 0z"/></svg>';
-    if (l.includes('mail') || l.includes('email')) return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><path d="m22 6-10 7L2 6"/></svg>';
-    if (l.includes('x') || l.includes('twitter')) return '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M18.9 1.15h3.68l-8.04 9.19L24 22.85h-7.41l-5.8-7.58-6.64 7.58H.47l8.6-9.83L0 1.15h7.6l5.24 6.93 6.06-6.93zm-1.29 19.5h2.04L6.49 3.24H4.3l13.31 17.41z"/></svg>';
-    if (l.includes('youtube')) return '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M23.5 6.19a3.02 3.02 0 0 0-2.12-2.14C19.5 3.55 12 3.55 12 3.55s-7.5 0-9.38.5A3.02 3.02 0 0 0 .5 6.19C0 8.07 0 12 0 12s0 3.93.5 5.81a3.02 3.02 0 0 0 2.12 2.14c1.88.5 9.38.5 9.38.5s7.5 0 9.38-.5a3.02 3.02 0 0 0 2.12-2.14C24 15.93 24 12 24 12s0-3.93-.5-5.81zM9.55 15.57V8.43L15.82 12l-6.27 3.57z"/></svg>';
-    if (l.includes('dev.to') || l.includes('devto')) return '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M7.42 10.05c-.18-.16-.46-.23-.84-.23H6l.02 2.44.04 2.45.56-.02c.41 0 .63-.07.83-.26.24-.24.26-.36.26-2.2 0-1.9-.02-1.97-.29-2.18zM0 4.94v14.12h24V4.94H0zM8.56 15.3c-.44.58-1.06.77-2.53.77H4.71V8.53h1.4c1.67 0 2.16.18 2.6.9.27.43.29.6.32 2.57.05 2.23-.02 2.8-.47 3.3zm5.09-5.47h-2.47v1.77h1.52v1.28l-.72.04-.75.03v1.77l1.22.03 1.2.04v1.28h-1.6c-1.53 0-1.6-.01-1.87-.3l-.3-.28v-3.16c0-3.02.01-3.18.25-3.48.23-.31.25-.31 1.88-.31h1.64v1.13zm4.58 2.18c-.25.86-1.01 1.31-2.02 1.2-.62-.06-.85-.17-1.1-.52l-.24-.33.42-.74.41-.72.24.26c.18.2.24.24.55.23.3.01.45-.13.5-.55.04-.25.03-.29-.83-1.88-.95-1.77-1.09-2.23-1.09-3.5 0-1.47.1-1.76.65-2.13.44-.28 1.08-.37 2.1-.28 1.75.12 2.22.48 2.47 1.83.02.1.05.29.08.41l1.2 2.1h.1a271.84 271.84 0 0 0 .33 2.1h-1.06l-.78-1.24-.75-1.17-.28-.06c-.19-.05-.3.01-.36.2-.06.21-.05.32.06.93l.9 1.66.05.01c.65.13.95.43 1.02.9.08.48-.06 1.19-.3 1.53zM20.9 15.65h-2.07l-.07-1.4c-.03-.77-.06-1.94-.06-2.6v-1.2l1.8-2.8c.98-1.53 1.85-2.86 1.94-2.95.17-.17.32-.22.61-.22.26-.01.46 0 .5.01l.34.01-2.44 3.77-.02.03.23.36c.14.22.91 1.37 1.72 2.58.8 1.19 1.47 2.21 1.47 2.25 0 .05-.05.06-.16.06h-2.45l-.98-1.49c-.55-.83-1.02-1.53-1.05-1.56l-.05-.02-.1.13-.08.6v1.34c0 .73.02 2.05.03 2.93z"/></svg>';
-    if (l.includes('globe') || l.includes('port') || l.includes('web')) return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>';
-    return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 12h6M9 16h6M9 8h6M7 12a5 5 0 0 1 5-5V3.5L20 8l-8 4.5V9a5 5 0 0 0-5 5 5 5 0 0 1-7 2"/></svg>';
+  const setErr = (msg, ok) => {
+    const el = $('form-error');
+    el.textContent = msg;
+    el.classList.remove('hidden');
+    el.classList.toggle('ok', !!ok);
   };
 
-  function setTheme(t) {
-    document.documentElement.setAttribute('data-theme', t);
-    try { localStorage.setItem('pf-theme', t); } catch (e) {}
-  }
-
-  function renderHero() {
-    $('hero-tagline').textContent = cfg.profile.tagline || '';
-    $('hero-name').textContent = cfg.profile.name || '';
-    $('hero-bio').textContent = cfg.profile.bio || '';
-    if (cfg.profile.avatar) $('hero-avatar').src = cfg.profile.avatar;
-    const cta = document.getElementById('hero-cta');
-    (cfg.profile.cta || []).forEach((c) => {
-      const a = document.createElement('a');
-      a.href = c.url || '#';
-      a.className = 'btn ' + (c.primary ? 'btn-primary' : '');
-      a.textContent = c.label || 'Link';
-      a.target = (c.url || '').startsWith('http') ? '_blank' : '_self';
-      cta.appendChild(a);
-    });
-    renderSocials('hero-socials', cfg.profile.socials || []);
-  }
-
-  function renderSocials(elId, list) {
-    const el = document.getElementById(elId);
-    el.innerHTML = '';
-    list.forEach((s) => {
-      const a = document.createElement('a');
-      a.href = s.url || '#';
-      a.className = 'social-badge';
-      a.target = (s.url || '').startsWith('http') ? '_blank' : '_self';
-      const label = s.label || (s.url || '').split('/').filter(Boolean).pop() || 'link';
-      a.title = label;
-      a.innerHTML = socialIcon(label) + '<span>' + esc(label) + '</span>';
-      el.appendChild(a);
-    });
-  }
-
-  function renderAbout() {
-    const about = cfg.about || {};
-    if (!about.text && !(about.highlights || []).length) return;
-    $('about').classList.remove('hidden');
-    $('about-body').innerHTML = esc(about.text || '');
-    const hc = document.getElementById('about-highlights');
-    (about.highlights || []).forEach((h) => {
-      const d = document.createElement('div');
-      d.className = 'highlight';
-      d.innerHTML = '<b>' + esc(h.title || '') + '</b><span>' + esc(h.text || '') + '</span>';
-      hc.appendChild(d);
-    });
-  }
-
-  function renderProjects() {
-    const list = cfg.projects || [];
-    if (!list.length) return;
-    $('projects').classList.remove('hidden');
-    const grid = document.getElementById('project-grid');
-    list.forEach((p) => {
-      const card = document.createElement('article');
-      card.className = 'project-card';
-      let stars = '';
-      if (p.stars) stars = '<span class="project-stars">★ ' + esc(String(p.stars)) + '</span>';
-      const tags = (p.tags || []).map((t) => '<span class="tag">' + esc(t) + '</span>').join('');
-      const links = [];
-      if (p.url) links.push('<a href="' + esc(p.url) + '" target="_blank" rel="noopener">Code ↗</a>');
-      if (p.demo) links.push('<a href="' + esc(p.demo) + '" target="_blank" rel="noopener">Demo ↗</a>');
-      card.innerHTML =
-        '<div class="project-head"><span class="project-name">' + esc(p.name || '') + '</span>' + stars + '</div>' +
-        '<p class="project-desc">' + esc(p.description || '') + '</p>' +
-        (tags ? '<div class="project-tags">' + tags + '</div>' : '') +
-        (links.length ? '<div class="project-links">' + links.join('') + '</div>' : '');
-      grid.appendChild(card);
-    });
-  }
-
-  function renderSkills() {
-    const groups = cfg.skills || [];
-    if (!groups.length) return;
-    $('skills').classList.remove('hidden');
-    const el = document.getElementById('skill-groups');
-    groups.forEach((g) => {
-      const d = document.createElement('div');
-      d.className = 'skill-group';
-      d.innerHTML = '<h3>' + esc(g.name || 'Skills') + '</h3>' +
-        '<div class="skill-chips">' + (g.items || []).map((s) => '<span class="skill">' + esc(s) + '</span>').join('') + '</div>';
-      el.appendChild(d);
-    });
-  }
-
-  function renderGithub() {
-    const u = cfg.githubUsername;
-    if (!u || cfg.githubStats === false) return;
-    $('github').classList.remove('hidden');
-    const el = document.getElementById('github-cards');
-    const mk = (src) => {
-      const d = document.createElement('div');
-      d.className = 'github-card';
-      d.innerHTML = '<img loading="lazy" alt="GitHub stats" src="' + esc(src) + '">';
-      el.appendChild(d);
+  const langIcon = (lang) => {
+    const map = {
+      'typescript': 'https://raw.githubusercontent.com/github/explore/80688e429a7d4ef2fca1e82350fe8e3517d3494d/topics/typescript/typescript.png',
+      'javascript': 'https://raw.githubusercontent.com/github/explore/80688e429a7d4ef2fca1e82350fe8e3517d3494d/topics/javascript/javascript.png',
+      'python': 'https://raw.githubusercontent.com/github/explore/80688e429a7d4ef2fca1e82350fe8e3517d3494d/topics/python/python.png',
+      'react': 'https://raw.githubusercontent.com/github/explore/80688e429a7d4ef2fca1e82350fe8e3517d3494d/topics/react/react.png',
+      'java': 'https://raw.githubusercontent.com/github/explore/80688e429a7d4ef2fca1e82350fe8e3517d3494d/topics/java/java.png',
+      'go': 'https://raw.githubusercontent.com/github/explore/80688e429a7d4ef2fca1e82350fe8e3517d3494d/topics/go/go.png',
+      'rust': 'https://raw.githubusercontent.com/github/explore/80688e429a7d4ef2fca1e82350fe8e3517d3494d/topics/rust/rust.png',
+      'php': 'https://raw.githubusercontent.com/github/explore/80688e429a7d4ef2fca1e82350fe8e3517d3494d/topics/php/php.png',
+      'ruby': 'https://raw.githubusercontent.com/github/explore/80688e429a7d4ef2fca1e82350fe8e3517d3494d/topics/ruby/ruby.png',
+      'c': 'https://raw.githubusercontent.com/github/explore/80688e429a7d4ef2fca1e82350fe8e3517d3494d/topics/c/c.png',
+      'cpp': 'https://raw.githubusercontent.com/github/explore/80688e429a7d4ef2fca1e82350fe8e3517d3494d/topics/cpp/cpp.png',
+      'csharp': 'https://raw.githubusercontent.com/github/explore/80688e429a7d4ef2fca1e82350fe8e3517d3494d/topics/csharp/csharp.png',
+      'swift': 'https://raw.githubusercontent.com/github/explore/80688e429a7d4ef2fca1e82350fe8e3517d3494d/topics/swift/swift.png',
+      'kotlin': 'https://raw.githubusercontent.com/github/explore/80688e429a7d4ef2fca1e82350fe8e3517d3494d/topics/kotlin/kotlin.png',
+      'html': 'https://raw.githubusercontent.com/github/explore/80688e429a7d4ef2fca1e82350fe8e3517d3494d/topics/html/html.png',
+      'css': 'https://raw.githubusercontent.com/github/explore/80688e429a7d4ef2fca1e82350fe8e3517d3494d/topics/css/css.png',
+      'shell': 'https://raw.githubusercontent.com/github/explore/80688e429a7d4ef2fca1e82350fe8e3517d3494d/topics/bash/bash.png',
+      'vue': 'https://raw.githubusercontent.com/github/explore/80688e429a7d4ef2fca1e82350fe8e3517d3494d/topics/vue/vue.png',
+      'dart': 'https://raw.githubusercontent.com/github/explore/80688e429a7d4ef2fca1e82350fe8e3517d3494d/topics/dart/dart.png',
     };
-    mk('https://github-readme-stats.vercel.app/api?username=' + encodeURIComponent(u) + '&show_icons=true&count_private=true&theme=transparent&hide_border=true');
-    mk('https://github-readme-stats.vercel.app/api/top-langs/?username=' + encodeURIComponent(u) + '&layout=compact&theme=transparent&hide_border=true');
-  }
+    if (!lang) return '';
+    const key = lang.toLowerCase();
+    if (map[key]) return '<code><img height="20" alt="' + esc(lang) + '" src="' + map[key] + '"></code> ';
+    if (key.includes('type')) return '<code><img height="20" alt="typescript" src="' + map.typescript + '"></code> ';
+    return '<code><img height="20" alt="' + esc(lang) + '" src="https://raw.githubusercontent.com/github/explore/80688e429a7d4ef2fca1e82350fe8e3517d3494d/topics/' + encodeURIComponent(key) + '/' + encodeURIComponent(key) + '.png"></code> ';
+  };
 
-  function renderExperience() {
-    const items = cfg.experience || [];
-    if (!items.length) return;
-    $('experience').classList.remove('hidden');
-    const tl = document.getElementById('timeline');
-    items.forEach((x) => {
-      const d = document.createElement('div');
-      d.className = 'timeline-item';
-      d.innerHTML = '<h3>' + esc(x.title || '') + '</h3>' +
-        '<div class="period">' + esc(x.period || '') + '</div>' +
-        (x.text ? '<p>' + esc(x.text) + '</p>' : '');
-      tl.appendChild(d);
+  async function api(path) {
+    const r = await fetch(GITHUB_API + path, {
+      headers: { Accept: 'application/vnd.github+json' }
     });
+    if (r.status === 404) throw new Error('user-not-found');
+    if (r.status === 403) throw new Error('rate-limited');
+    if (!r.ok) throw new Error('http-' + r.status);
+    return r.json();
   }
 
-  function renderContact() {
-    const c = cfg.contact || {};
-    if (!c.text && !(c.socials || []).length) return;
-    $('contact').classList.remove('hidden');
-    $('contact-text').textContent = c.text || '';
-    renderSocials('contact-links', c.socials || []);
+  async function loadUser(username) {
+    const u = username.trim().replace(/^@/, '');
+    const [user, repos] = await Promise.all([
+      api('/users/' + encodeURIComponent(u)),
+      api('/users/' + encodeURIComponent(u) + '/repos?per_page=100&sort=pushed')
+    ]);
+    return { user, repos: repos.filter((r) => !r.fork) };
   }
 
-  function renderFooter() {
-    $('footer-note').textContent = cfg.footer || '';
+  function topLanguages(repos, user) {
+    const lang = user && user.language || null;
+    const counts = {};
+    repos.forEach((r) => { if (r.language) counts[r.language] = (counts[r.language] || 0) + 1; });
+    const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+    const langs = sorted.slice(0, 8).map((l) => l[0]);
+    if (lang && !langs.includes(lang)) langs.unshift(lang);
+    return langs.slice(0, 8);
   }
 
-  function observe() {
-    const io = new IntersectionObserver((entries) => {
-      entries.forEach((e) => {
-        if (e.isIntersecting) {
-          e.target.classList.add('visible');
-          io.unobserve(e.target);
-        }
+  function topRepos(repos, n) {
+    return [...repos].sort((a, b) => (b.stargazers_count || 0) - (a.stargazers_count || 0)).slice(0, n);
+  }
+
+  function featuredRepoTable(repos) {
+    const top = topRepos(repos, 6);
+    if (!top.length) return '';
+    const rows = top.map((r) => {
+      const name = r.name;
+      const desc = (r.description || '').replace(/\s+/g, ' ').trim().slice(0, 70);
+      const stars = r.stargazers_count || 0;
+      const lang = r.language ? '<img height="20" alt="' + esc(r.language) + '" src="https://raw.githubusercontent.com/github/explore/80688e429a7d4ef2fca1e82350fe8e3517d3494d/topics/' + encodeURIComponent((r.language || '').toLowerCase()) + '/' + encodeURIComponent((r.language || '').toLowerCase()) + '.png">' : '';
+      return '| [' + esc(name) + '](https://github.com/' + esc(state.user.login) + '/' + esc(name) + ') | ' + (stars ? '★ ' + stars : '') + ' | ' + lang + ' | ' + esc(desc) + ' |';
+    }).join('\n');
+    return rows;
+  }
+
+  function badges(user) {
+    return [
+      '![GitHub followers](https://img.shields.io/github/followers/' + esc(user.login) + '?style=social)',
+    ].join('\n');
+  }
+
+  function generate() {
+    const { user, repos } = state;
+    const langs = topLanguages(repos, user);
+    const langIcons = langs.map(langIcon).join('');
+    const u = user.login;
+    const name = user.name || u;
+    const bio = (user.bio || 'A developer who loves building things.') + (user.location ? ' Based in ' + user.location + '.' : '');
+    const extra = user.company ? '\n\n- 💼 Working at **' + esc(user.company) + '**\n' : '';
+    const repoTable = featuredRepoTable(repos);
+    const topRepoNames = topRepos(repos, 3).map((r) => '[' + esc(r.name) + '](https://github.com/' + esc(u) + '/' + esc(r.name) + ')').join(', ');
+
+    const cards = '<a href="https://github.com/' + esc(u) + '"><img align="center" src="https://github-readme-stats.vercel.app/api?username=' + esc(u) + '&show_icons=true&include_all_commits=true&theme=transparent&hide_border=true" alt="' + esc(u) + '\'s GitHub stats" /></a>';
+
+    const styles = {
+      clean: `### Hi there 👋, I'm **${esc(name)}**
+
+${badges(user)}
+
+I'm ${esc(bio)}
+
+**About me**
+- 🔭 Currently working on: ${topRepoNames || 'open source'}
+- 🌱 Always learning new technologies
+- 💬 Ask me about anything
+- ⚡ Fun fact: I believe in building in public${extra}
+
+${langIcons}
+
+| ${cards.replace(/\n/g, ' ')} | <a href="https://github.com/${esc(u)}"><img align="center" src="https://github-readme-stats.vercel.app/api/top-langs/?username=${esc(u)}&layout=compact&theme=transparent&hide_border=true" /></a> |
+| ------------- | ------------- |
+
+#### ⭐ Featured projects
+${repoTable ? '\n' + repoTable : 'Check out my repos: https://github.com/' + esc(u)}`,
+
+      typing: `<h3 align="center">Hi 👋, I'm <a href="https://github.com/${esc(u)}">${esc(name)}</a></h3>
+<p align="center">
+  <img src="https://readme-typing-svg.demolab.com/?lines=${encodeURIComponent((user.bio || 'Developer') + ';' + (user.location || 'Building in public'))}&font=Fira%20Code&center=true&width=500&height=45&color=46b6ff&vCenter=true&pause=1200&size=22" />
+</p>
+
+<p align="center">
+  <a href="https://github.com/${esc(u)}"><img width="32px" src="https://cdn.jsdelivr.net/gh/simple-icons/simple-icons/icons/github.svg" alt="GitHub" /></a>
+  &#8287;&#8287;${user.blog ? '\n  <a href="' + esc(user.blog) + '"><img width="32px" src="https://cdn.jsdelivr.net/gh/simple-icons/simple-icons/icons/globe.svg" alt="Website" /></a>\n  &#8287;&#8287;' : ''}<a href="mailto:${esc('hello@' + (user.email || ((user.login || 'example.com').indexOf('@') > -1 ? user.login : user.login + '@example.com')))}"><img width="32px" src="https://cdn.jsdelivr.net/gh/simple-icons/simple-icons/icons/gmail.svg" alt="Email" /></a>
+</p>
+
+<p align="center">
+  <a href="https://github.com/${esc(u)}">${esc(user.followers || 0)} Followers</a> &#8287;·&#8287;
+  <a href="https://github.com/${esc(u)}">${esc(user.following || 0)} Following</a>
+</p>
+
+**About me**
+- 🔭 I'm ${esc(bio)}
+- 🌱 I'm currently learning and building in public
+- 💬 Ask me about anything${extra}
+
+${langIcons}
+
+| ${cards.replace(/\n/g, ' ')} | <a href="https://github.com/${esc(u)}"><img align="center" src="https://github-readme-stats.vercel.app/api/top-langs/?username=${esc(u)}&layout=compact&theme=transparent&hide_border=true" /></a> |
+| ------------- | ------------- |
+
+#### ⭐ Featured projects
+${repoTable ? '\n' + repoTable : 'Check out my repos: https://github.com/' + esc(u)}`,
+
+      badges: `# ${esc(name)}
+
+${badges(user)}
+
+${esc(bio)}
+
+## 🛠️ Tech Stack
+${langs.map((l) => '![tech](https://img.shields.io/badge/Tech-' + encodeURIComponent(l) + '-blue)').join(' ')}
+
+## 💼 Experience
+- **Software Developer** — building products and open source (${new Date().getFullYear()} - present)
+
+## 🚀 Featured Projects
+${repoTable ? repoTable.replace(/\$\[/g, '[').replace(/\]https:\/\//g, '](https://') : 'https://github.com/' + esc(u)}
+
+## 📊 Stats
+| ${cards.replace(/\n/g, ' ')} | <a href="https://github.com/${esc(u)}"><img align="center" src="https://github-readme-stats.vercel.app/api/top-langs/?username=${esc(u)}&layout=compact&theme=transparent&hide_border=true" /></a> |
+| ------------- | ------------- |
+
+---
+*Profile generated with [README Forge](https://github.com/Abdellox/portfolio-forge) — free & open source.*`
+    };
+
+    return styles[state.style] || styles.clean;
+  }
+
+  function renderStyleCards() {
+    const grid = $('style-cards');
+    grid.innerHTML = '';
+    Object.entries(STYLES).forEach(([key, s]) => {
+      const el = document.createElement('div');
+      el.className = 'style-card' + (key === state.style ? ' active' : '');
+      el.dataset.style = key;
+      el.innerHTML =
+        '<div class="style-emoji">' + s.emoji + '</div>' +
+        '<h3>' + s.name + '</h3>' +
+        '<p>' + s.desc + '</p>' +
+        '<div class="style-tags">' + s.tags.map((t) => '<span>' + t + '</span>').join('') + '</div>';
+      el.addEventListener('click', () => {
+        state.style = key;
+        document.querySelectorAll('.style-card').forEach((c) => c.classList.toggle('active', c === el));
+        refresh();
       });
-    }, { threshold: 0.08 });
-    document.querySelectorAll('.section').forEach((s) => {
-      if (!s.classList.contains('hidden')) { s.classList.add('reveal'); io.observe(s); }
+      grid.appendChild(el);
     });
   }
 
-  async function loadConfig() {
-    try {
-      const r = await fetch('config.json', { cache: 'no-store' });
-      if (!r.ok) throw new Error('http ' + r.status);
-      cfg = await r.json();
-    } catch (e) {
-      console.warn('config.json unavailable, using defaults:', e.message);
-      cfg = FALLBACK;
-    }
-    setTheme((cfg.theme || 'dark') === 'dark' ? 'dark' : 'light');
+  function setUsername(username) {
+    $('username').value = username;
   }
+
+  async function refresh() {
+    if (!state.user) return;
+    const md = generate();
+    $('md-output').value = md;
+    $('output').classList.remove('hidden');
+    $('output').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    if (window.marked) {
+      $('tab-preview').innerHTML = marked.parse(md);
+      $('tab-preview').querySelectorAll('a').forEach((a) => { a.target = '_blank'; a.rel = 'noopener'; });
+    } else {
+      $('tab-preview').textContent = 'Loading preview...';
+    }
+  }
+
+  async function onSubmit(e) {
+    e.preventDefault();
+    const username = $('username').value.trim();
+    if (!username) { setErr('Please enter a GitHub username.'); return; }
+    const btn = $('gen-btn');
+    const spinner = btn.querySelector('.spinner');
+    btn.disabled = true;
+    btn.querySelector('.btn-label').textContent = 'Fetching...';
+    spinner.classList.remove('hidden');
+    setErr('');
+    try {
+      const data = await loadUser(username);
+      state.user = data.user;
+      state.repos = data.repos;
+      setUsername(username);
+      $('output-title').textContent = 'Your README — ' + data.user.name || data.user.login;
+      await refresh();
+    } catch (err) {
+      if (err.message === 'user-not-found') setErr('User not found on GitHub — check the spelling.');
+      else if (err.message === 'rate-limited') setErr('Rate limit hit (60 req/hr). Wait a minute and try again, or add ?username= URL param.');
+      else setErr('Could not fetch user: ' + err.message);
+    } finally {
+      btn.disabled = false;
+      btn.querySelector('.btn-label').textContent = 'Generate README';
+      spinner.classList.add('hidden');
+    }
+  }
+
+  $('gen-form').addEventListener('submit', onSubmit);
+
+  $('copy-btn').addEventListener('click', async () => {
+    const md = $('md-output').value;
+    try {
+      await navigator.clipboard.writeText(md);
+      const b = $('copy-btn');
+      b.textContent = '✅ Copied!';
+      setTimeout(() => { b.textContent = '📋 Copy'; }, 2000);
+    } catch (err) {
+      $('md-output').select();
+      document.execCommand('copy');
+      $('copy-btn').textContent = '✅ Copied!';
+      setTimeout(() => { $('copy-btn').textContent = '📋 Copy'; }, 2000);
+    }
+  });
+
+  $('download-btn').addEventListener('click', () => {
+    const name = (state.user && state.user.login) || 'profile';
+    const blob = new Blob([$('md-output').value], { type: 'text/markdown' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = name + '-README.md';
+    a.click();
+    URL.revokeObjectURL(a.href);
+  });
+
+  document.querySelectorAll('.tab').forEach((t) => {
+    t.addEventListener('click', () => {
+      document.querySelectorAll('.tab').forEach((x) => x.classList.remove('active'));
+      t.classList.add('active');
+      const id = t.dataset.tab;
+      $('tab-preview').classList.toggle('hidden', id !== 'preview');
+      $('tab-markdown').classList.toggle('hidden', id !== 'markdown');
+      if (id === 'markdown') $('md-output').focus();
+    });
+  });
 
   document.getElementById('theme-toggle').addEventListener('click', () => {
     const cur = document.documentElement.getAttribute('data-theme') || 'dark';
-    setTheme(cur === 'dark' ? 'light' : 'dark');
+    const next = cur === 'dark' ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-theme', next);
+    try { localStorage.setItem('rf-theme', next); } catch (e) {}
   });
 
-  loadConfig().then(() => {
-    renderHero();
-    renderAbout();
-    renderProjects();
-    renderSkills();
-    renderGithub();
-    renderExperience();
-    renderContact();
-    renderFooter();
-    observe();
-  });
+  const savedTheme = (() => { try { return localStorage.getItem('rf-theme'); } catch (e) { return null; } })();
+  if (savedTheme) document.documentElement.setAttribute('data-theme', savedTheme === 'dark' ? 'dark' : 'light');
+
+  renderStyleCards();
+
+  const urlName = new URLSearchParams(location.search).get('username');
+  if (urlName) {
+    $('username').value = urlName;
+    setErr('');
+  }
 })();
